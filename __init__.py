@@ -28,6 +28,10 @@ def create_app(test_config=None):
 				return redirect(url_for('log_in'))
 			return view(**kwargs)
 		return wrapped_view
+	
+	@app.errorhandler(404)
+	def page_not_found(e):
+		return render_template('404.html'), 404
 
 	@app.before_request
 	def load_user():
@@ -74,7 +78,7 @@ def create_app(test_config=None):
 			if error is None:
 				session.clear()
 				session['user_id'] = user.id
-				return redirect(url_for('index'))
+				return redirect(url_for('note_index'))
 			flash(error, 'error')
 		return render_template('log_in.html')
 	
@@ -83,10 +87,6 @@ def create_app(test_config=None):
 		session.clear()
 		flash('Successfully logged out.', 'success')
 		return redirect(url_for('log_in'))
-	
-	@app.route('/')
-	def index():
-		return 'Index'
 
 	@app.route('/notes')
 	@require_login
@@ -112,6 +112,38 @@ def create_app(test_config=None):
 				return redirect(url_for('note_index'))
 			flash(error, 'error')
 		return render_template('note_create.html')	
-
+	
+	@app.route('/notes/<note_id>/edit', methods=('GET', 'PUT', 'POST', 'PATCH'))
+	@require_login
+	def note_update(note_id):
+		note = Note.query.filter_by(user_id=g.user.id, id=note_id).first_or_404()
+		
+		if request.method in ['PUT', 'POST', 'PATCH']:
+			title = request.form['title']
+			body = request.form['body']
+			error = None
+			
+			if not title:
+				error = 'Title is required.'
+			
+			if error is None:
+				note.title = title
+				note.body = body
+				db.session.add(note)
+				db.session.commit()
+				flash(f"Successfully updated note: {title}", 'success')
+				return redirect(url_for('note_index'))
+			flash(error, 'error')
+		return render_template('note_update.html', note=note)
+	
+	@app.route('/notes/<note_id>/delete', methods=('GET', 'DELETE'))
+	@require_login
+	def note_delete(note_id):
+		note = Note.query.filter_by(user_id=g.user.id, id=note_id).first_or_404()
+		db.session.delete(note)
+		db.session.commit()
+		flash(f"Successfully deleted note: '{note.title}'", 'success')
+		return redirect(url_for('note_index'))
+	
 	return app
 
